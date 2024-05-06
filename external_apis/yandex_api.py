@@ -1,4 +1,4 @@
-from api_keys import api_key_yandex_orgs
+from api_keys_yandex import api_key_yandex_orgs
 import requests as req
 import json
 
