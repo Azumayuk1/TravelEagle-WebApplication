@@ -1,68 +1,6 @@
 import requests as req
 
-from external_apis.api_keys_2gis import api_key_yandex_orgs, api_key_2gis
-
-
-# Extracts info about features from API response.
-# Feature can be any organization, like a cafe or a park.
-def extract_features_info(response):
-    try:
-        # Parsing JSON-response
-        data = response
-
-        features = []
-
-        print("Found features: ", data["properties"]["ResponseMetaData"]["SearchResponse"]["found"])
-
-        for (index, feature) in enumerate(data["features"]):
-            # Getting the required info
-            company_info = {
-                "id": feature["properties"]["CompanyMetaData"]["id"],
-                "name": feature["properties"]["CompanyMetaData"]["name"],
-                "address": feature["properties"]["CompanyMetaData"]["address"],
-                "url": feature["properties"]["CompanyMetaData"].get("url", None),
-                "categories": [category["name"] for category in
-                               feature["properties"]["CompanyMetaData"]["Categories"]],
-                "hours": feature["properties"]["CompanyMetaData"].get("Hours", None)
-            }
-            features.append(company_info)
-
-        return features
-    except (KeyError, IndexError, ValueError) as e:
-        print(f"Error while extracting info from JSON: {e}")
-        return None
-
-
-def yandex_find_places(search_query: str, longitude: str, latitude: str):
-    url = "https://search-maps.yandex.ru/v1/"
-    params = {
-        "apikey": api_key_yandex_orgs,
-        "text": search_query,
-        "lang": "ru_RU",
-        "ll": latitude + ',' + longitude,
-        "spn": "0.09,0.09",  # 1 kilometer ~~ 0.009
-        "results": '10',
-        "rspn": "1"
-    }
-
-    response = req.get(url, params=params)
-    return extract_features_info(response.json())
-
-
-def yandex_find_eateries(longitude: str, latitude: str):
-    url = "https://search-maps.yandex.ru/v1/"
-    params = {
-        "apikey": api_key_yandex_orgs,
-        "text": 'Где поесть',
-        "lang": "ru_RU",
-        "ll": latitude + ',' + longitude,
-        "spn": "0.009,0.009",  # 1 kilometer ~~ 0.009
-        "results": '10',
-        "rspn": "1"
-    }
-
-    response = req.get(url, params=params)
-    return extract_features_info(response.json())
+from external_apis.api_keys_2gis import api_key_2gis
 
 
 # Function that parses 2GIS JSON response
@@ -71,9 +9,14 @@ def parse_2gis_response(response):
     items = response.get('result', {}).get('items', [])
 
     for item in items:
+        rubrics = item.get('rubrics', [])
+        external_content = item.get('external_content', [{}])
+
         parsed_item = {
             'address': item.get('address_name', ''),
-            'image': item.get('external_content', [{}])[0].get('main_photo_url', ''),
+            'image': external_content[0].get('main_photo_url', '') if external_content and len(
+                external_content) > 0 else '',
+            'url': external_content[0].get('url', '') if external_content and len(external_content) > 0 else '',
             'name': item.get('name', ''),
             'id': item.get('id', ''),
             'purpose_name': item.get('purpose_name', ''),
@@ -82,6 +25,7 @@ def parse_2gis_response(response):
             'description': item.get('full_name', ''),
             'latitude': item.get('point', {}).get('lat', None),
             'longitude': item.get('point', {}).get('lon', None),
+            'type_name': rubrics[0]['name'] if rubrics and len(rubrics) > 0 else 'Место'
         }
         parsed_data.append(parsed_item)
 
@@ -110,6 +54,28 @@ def api_2gis_find_places(city_name: str, query: str, page: int, results_per_page
         'page_size': results_per_page,
         'page': page,
         'fields': 'items.reviews,items.description,items.external_content,items.point',
+    }
+
+    places = req.get(url_places, params=params_places).json()
+    print('--- Places ---')
+    print(places)
+
+    return parse_2gis_response(places)
+
+
+def api_2gis_find_places_nearby(latitude: str, longitude: str, query: str):
+    # Getting places in a city
+    url_places = 'https://catalog.api.2gis.com/3.0/items'
+
+    params_places = {
+        'q': query,
+        'key': api_key_2gis,
+        'sort': 'relevance',
+        'page_size': 3,
+        'page': 1,
+        'fields': 'items.reviews,items.description,items.external_content,items.point',
+        'search_nearby': 'true',
+        'location': f'{longitude},{latitude}'
     }
 
     places = req.get(url_places, params=params_places).json()
@@ -177,3 +143,7 @@ def api_2gis_get_distances_matrix(point_x, point_y, point_z):
     else:
         print("Error:", response.status_code)
         print("Error text:", response.text)
+
+
+def api_yandex_get_weather():
+    return 'Возьмите зонт! Ожидаются редкие дожди.'

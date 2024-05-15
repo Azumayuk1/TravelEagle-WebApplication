@@ -48,6 +48,9 @@ def create_recommendations(city_name, query, ignored_place_types, preferred_plac
 
             w4 = likes * s_likes
 
+            # Additionally adding amount of likes to place
+            place['likes'] = likes
+
             place_weight = w1 * (w0 + (w2 * w3) + w4)
 
             place_with_weight = {
